@@ -321,6 +321,12 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
 
   void _handleIOSSoftKeyboardInput(String newValue) {
+    // Do not send IME marked text (e.g. Japanese romaji/kana before conversion).
+    // `_value` stays at the last committed text, so the commit is diffed once.
+    final composing = _textController.value.composing;
+    if (_textController.value.isComposingRangeValid && !composing.isCollapsed) {
+      return;
+    }
     var oldValue = _value;
     _value = newValue;
     var i = newValue.length - 1;
@@ -363,7 +369,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     }
 
     // Input the new string.
-    if (newStr.length > 1) {
+    if (newStr.length > 1 || (newStr.isNotEmpty && newStr.codeUnitAt(0) > 0x7f)) {
       bind.sessionInputString(sessionId: sessionId, value: newStr);
     } else {
       inputChar(newStr);
