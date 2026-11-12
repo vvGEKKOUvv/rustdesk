@@ -785,8 +785,6 @@ RawGestureDetector getMixinGestureDetector({
             GestureRecognizerFactoryWithHandlers<CustomTouchGestureRecognizer>(
                 () => CustomTouchGestureRecognizer(), (instance) {
           instance
-            // Default pan slop is 36px, so a drag does not start until the finger moves that far.
-            ..gestureSettings = const DeviceGestureSettings(touchSlop: 4)
             ..onOneFingerPanStart = onOneFingerPanStart
             ..onOneFingerPanUpdate = onOneFingerPanUpdate
             ..onOneFingerPanEnd = onOneFingerPanEnd

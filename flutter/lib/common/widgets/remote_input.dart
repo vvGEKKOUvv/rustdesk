@@ -579,6 +579,7 @@ class _RawTouchGestureDetectorRegionState
         instance.onOneFingerPanStart =
             (DragStartDetails d) => onOneFingerPanStart(context, d);
         instance
+          ..gestureSettings = const DeviceGestureSettings(touchSlop: 4)
           ..onOneFingerPanUpdate = onOneFingerPanUpdate
           ..onOneFingerPanEnd = onOneFingerPanEnd
           ..onOneFingerPanCancel = onOneFingerPanCancel
