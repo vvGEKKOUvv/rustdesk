@@ -168,6 +168,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       }
     });
     WidgetsBinding.instance.addObserver(this);
+    _textController.addListener(_onIOSComposingCommitted);
 
     inputModel.keyboardInputAllowed = true;
 
@@ -188,6 +189,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   Future<void> dispose() async {
     HardwareKeyboard.instance.removeHandler(_handleLocalKeyEvent);
     WidgetsBinding.instance.removeObserver(this);
+    _textController.removeListener(_onIOSComposingCommitted);
     // Close the session up-front. `gFFI.close()` below only calls `sessionClose`
     // after several awaits (canvas save, image update, the `enable_soft_keyboard`
     // platform call), so if the app is backgrounded while this page is disposing,
@@ -320,11 +322,29 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     setState(() {});
   }
 
+  // `onChanged` is not called when IME composition is committed without the text
+  // changing (e.g. confirming kana as is), so catch that through the controller.
+  void _onIOSComposingCommitted() {
+    if (!isIOS || !_showEdit) {
+      return;
+    }
+    final v = _textController.value;
+    if (v.isComposingRangeValid && !v.composing.isCollapsed) {
+      return;
+    }
+    if (v.text != _value) {
+      handleSoftKeyboardInput(v.text);
+    }
+  }
+
   void _handleIOSSoftKeyboardInput(String newValue) {
     // Do not send IME marked text (e.g. Japanese romaji/kana before conversion).
     // `_value` stays at the last committed text, so the commit is diffed once.
     final composing = _textController.value.composing;
     if (_textController.value.isComposingRangeValid && !composing.isCollapsed) {
+      return;
+    }
+    if (newValue == _value) {
       return;
     }
     var oldValue = _value;
