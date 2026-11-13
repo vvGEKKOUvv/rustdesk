@@ -508,11 +508,20 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     });
   }
 
+  bool get _barOnRight =>
+      !_showGestureHelp &&
+      MediaQuery.of(context).orientation == Orientation.landscape;
+
   Widget _bottomWidget() => _showGestureHelp
       ? getGestureHelp()
-      : (_showBar && gFFI.ffiModel.pi.displays.isNotEmpty
+      : (_showBar && gFFI.ffiModel.pi.displays.isNotEmpty && !_barOnRight
           ? getBottomAppBar()
           : Offstage());
+
+  Widget _rightBar() =>
+      _showBar && gFFI.ffiModel.pi.displays.isNotEmpty && _barOnRight
+          ? getBottomAppBar(vertical: true)
+          : Offstage();
 
   @override
   Widget build(BuildContext context) {
@@ -572,7 +581,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                 ],
               )),
           body: Obx(
-            () => getRawPointerAndKeyBody(Overlay(
+            () => Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Expanded(child: getRawPointerAndKeyBody(Overlay(
               initialEntries: [
                 OverlayEntry(builder: (context) {
                   return Container(
@@ -604,7 +614,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                   );
                 })
               ],
-            )),
+            ))),
+              _rightBar(),
+            ]),
           )),
     );
   }
@@ -628,16 +640,17 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     );
   }
 
-  Widget getBottomAppBar() {
+  Widget getBottomAppBar({bool vertical = false}) {
     final ffiModel = Provider.of<FfiModel>(context);
-    return BottomAppBar(
-      elevation: 10,
-      color: MyTheme.accent,
-      child: Row(
+    final axis = vertical ? Axis.vertical : Axis.horizontal;
+    final bar = Flex(
+        direction: axis,
         mainAxisSize: MainAxisSize.max,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: <Widget>[
-          Row(
+          Flex(
+              direction: axis,
+              mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                     IconButton(
                       color: Colors.white,
@@ -723,6 +736,16 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                       },
               )),
         ],
+    );
+    if (!vertical) {
+      return BottomAppBar(elevation: 10, color: MyTheme.accent, child: bar);
+    }
+    return Material(
+      elevation: 10,
+      color: MyTheme.accent,
+      child: SafeArea(
+        left: false,
+        child: SizedBox(width: 56, child: bar),
       ),
     );
   }
