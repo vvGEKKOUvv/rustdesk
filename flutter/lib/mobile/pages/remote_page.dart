@@ -1217,6 +1217,13 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
       }
     } else if (!_items![from].isBuiltin) {
       _editShortcut(from, isMac);
+    } else if (_items![from].id != 'more') {
+      // 組み込みキーはタップで行から外し、展開パネル側へ移す(「...」は展開に必要なので残す)
+      setState(() {
+        _fn = false;
+        _items!.removeAt(from);
+      });
+      _saveItems();
     }
   }
 
@@ -1559,6 +1566,29 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
         press('VK_RIGHT');
       }, icon: Icons.keyboard_arrow_right),
     ];
+    // 行から外した組み込みキーは「...」の展開パネルに並べる(編集中はタップで行へ戻す)
+    final hiddenIds = [
+      for (final id in ['ctrl', 'alt', 'shift', 'win', 'fn', 'pin'])
+        if (!_items!.any((e) => e.isBuiltin && e.id == id)) id
+    ];
+    final fnInMore = hiddenIds.contains('fn');
+    final hidden = <Widget>[
+      for (final id in hiddenIds)
+        if (_editing)
+          wrap(
+              const {
+                    'ctrl': 'Ctrl',
+                    'alt': 'Alt',
+                    'shift': 'Shift',
+                    'fn': 'Fn',
+                  }[id] ??
+                  (id == 'win' ? (isMac ? 'Cmd' : 'Win') : ''), () {
+            setState(() => _items!.add(_KeyShortcut.builtin(id)));
+            _saveItems();
+          }, icon: id == 'pin' ? Icons.push_pin : null)
+        else if (id != 'fn')
+          builtins[id]!
+    ];
     while (_itemKeys.length < _items!.length) {
       _itemKeys.add(GlobalKey());
     }
@@ -1576,7 +1606,8 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
       if (_editing) ...[
         wrap('', () => _editShortcut(null, isMac), icon: Icons.add),
         wrap('完了', () => setState(() => _editing = false), active: true),
-        Text('下のキーをタップで追加', style: TextStyle(color: Colors.white70, fontSize: 11)),
+        Text('上のキーをタップで展開側へ移動 / 下のキーをタップで追加',
+            style: TextStyle(color: Colors.white70, fontSize: 11)),
       ],
     ];
     final space = size.width > 320 ? 4.0 : 2.0;
@@ -1599,7 +1630,11 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
           children: <Widget>[brk()] +
               items +
               (_fn || _editing ? fn : []) +
-              (_more || _editing ? more : []),
+              (_more || _editing
+                  ? more +
+                      (hidden.isEmpty ? [] : [brk()] + hidden) +
+                      (fnInMore && !_editing ? fn : [])
+                  : []),
         ));
     return _vertical
         ? Positioned(left: 0, top: 0, bottom: 0, child: content)
