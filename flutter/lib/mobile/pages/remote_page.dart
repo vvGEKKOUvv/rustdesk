@@ -105,6 +105,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   final FocusNode _mobileFocusNode = FocusNode();
   final FocusNode _physicalFocusNode = FocusNode();
   var _showEdit = false; // use soft keyboard
+  var _showShortcuts = false; // ショートカットバーだけを表示する
 
   Worker? _waylandKeyboardGateWorker;
   bool _waylandKeyboardGateInitialized = false;
@@ -706,6 +707,14 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                                   icon: Icon(Icons.keyboard),
                                   onPressed: openKeyboard),
                               IconButton(
+                                color: _showShortcuts
+                                    ? Colors.yellowAccent
+                                    : Colors.white,
+                                icon: Icon(Icons.bolt),
+                                onPressed: () => setState(
+                                    () => _showShortcuts = !_showShortcuts),
+                              ),
+                              IconButton(
                                 color: Colors.white,
                                 icon: Icon(gFFI.ffiModel.touchMode
                                     ? Icons.touch_app
@@ -786,7 +795,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
               return KeyHelpTools(
                   keyboardIsVisible: keyboardVisibilityController.isVisible &&
                       (_showEdit || chatKeyboardRequested),
-                  showGestureHelp: _showGestureHelp);
+                  showGestureHelp: _showGestureHelp,
+                  showShortcuts: _showShortcuts);
             }),
             SizedBox(
               width: 0,
@@ -1046,12 +1056,15 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 class KeyHelpTools extends StatefulWidget {
   final bool keyboardIsVisible;
   final bool showGestureHelp;
+  final bool showShortcuts;
 
   /// need to show by external request, etc [keyboardIsVisible] or [changeTouchMode]
-  bool get requestShow => keyboardIsVisible || showGestureHelp;
+  bool get requestShow => keyboardIsVisible || showGestureHelp || showShortcuts;
 
   KeyHelpTools(
-      {required this.keyboardIsVisible, required this.showGestureHelp});
+      {required this.keyboardIsVisible,
+      required this.showGestureHelp,
+      this.showShortcuts = false});
 
   @override
   State<KeyHelpTools> createState() => _KeyHelpToolsState();
