@@ -2347,8 +2347,10 @@ class CanvasModel with ChangeNotifier {
           parent.target?.cursorModel.keyHelpToolsRectToAdjustCanvas?.bottom ??
               0;
       final cover = max(top - mediaData.padding.top, 0.0);
-      return Size(ls.width < 0 ? 0 : ls.width,
-          (ls.height - cover) < 0 ? 0 : ls.height - cover);
+      // The soft keyboard shrinks the layout; add it back so the canvas keeps
+      // its size and is shifted up instead (see mobileFocusCanvasCursor).
+      final h = ls.height + mediaData.viewInsets.bottom - cover;
+      return Size(ls.width < 0 ? 0 : ls.width, h < 0 ? 0 : h);
     }
     final size = mediaData.size;
     // If minimized, w or h may be negative here.
@@ -2810,9 +2812,11 @@ class CanvasModel with ChangeNotifier {
   void mobileFocusCanvasCursor() {
     _timerMobileFocusCanvasCursor?.cancel();
     _timerMobileFocusCanvasCursor =
-        Timer(Duration(milliseconds: 100), () async {
+        Timer(Duration(milliseconds: 350), () async {
       updateSize();
       _resetCanvasOffset(getDisplayWidth(), getDisplayHeight());
+      // Canvas is not shrunk by the keyboard: lift it so it is centered above it.
+      _y -= MediaQueryData.fromView(ui.window).viewInsets.bottom / 2;
       notifyListeners();
     });
   }

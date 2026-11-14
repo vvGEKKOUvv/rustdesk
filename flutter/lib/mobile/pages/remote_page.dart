@@ -1076,6 +1076,11 @@ final _shortcutKeyLabels = <String, String>{
   'VK_UP': '↑',
   'VK_DOWN': '↓',
   'VK_RIGHT': '→',
+  'VK_INSERT': 'Ins',
+  'VK_SNAPSHOT': 'PrtScr',
+  'VK_SCROLL': 'ScrollLock',
+  'VK_PAUSE': 'Pause',
+  'Apps': 'Menu',
 };
 
 class _KeyShortcut {
@@ -1461,75 +1466,84 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
               ),
           active: _more),
     };
+    void press(String vk) {
+      if (!_editing) {
+        inputModel.inputKey(vk);
+        return;
+      }
+      setState(() => _items!.add(_KeyShortcut(vk)));
+      _saveItems();
+    }
+
     final fn = <Widget>[
       brk(),
     ];
     for (var i = 1; i <= 12; ++i) {
       final name = 'F$i';
       fn.add(wrap(name, () {
-        inputModel.inputKey('VK_$name');
+        press('VK_$name');
       }));
     }
     final more = <Widget>[
       brk(),
       wrap('Esc', () {
-        inputModel.inputKey('VK_ESCAPE');
+        press('VK_ESCAPE');
       }),
       wrap('Tab', () {
-        inputModel.inputKey('VK_TAB');
+        press('VK_TAB');
       }),
       wrap('Home', () {
-        inputModel.inputKey('VK_HOME');
+        press('VK_HOME');
       }),
       wrap('End', () {
-        inputModel.inputKey('VK_END');
+        press('VK_END');
       }),
       wrap('Ins', () {
-        inputModel.inputKey('VK_INSERT');
+        press('VK_INSERT');
       }),
       wrap('Del', () {
-        inputModel.inputKey('VK_DELETE');
+        press('VK_DELETE');
       }),
       wrap('PgUp', () {
-        inputModel.inputKey('VK_PRIOR');
+        press('VK_PRIOR');
       }),
       wrap('PgDn', () {
-        inputModel.inputKey('VK_NEXT');
+        press('VK_NEXT');
       }),
       // to-do: support PrtScr on Mac
       if (isWin || isLinux)
         wrap('PrtScr', () {
-          inputModel.inputKey('VK_SNAPSHOT');
+          press('VK_SNAPSHOT');
         }),
       if (isWin || isLinux)
         wrap('ScrollLock', () {
-          inputModel.inputKey('VK_SCROLL');
+          press('VK_SCROLL');
         }),
       if (isWin || isLinux)
         wrap('Pause', () {
-          inputModel.inputKey('VK_PAUSE');
+          press('VK_PAUSE');
         }),
       if (isWin || isLinux)
         // Maybe it's better to call it "Menu"
         // https://en.wikipedia.org/wiki/Menu_key
         wrap('Menu', () {
-          inputModel.inputKey('Apps');
+          press('Apps');
         }),
       wrap('Enter', () {
-        inputModel.inputKey('VK_ENTER');
+        press('VK_ENTER');
       }),
       brk(),
       wrap('', () {
-        inputModel.inputKey('VK_LEFT');
+        press('VK_LEFT');
       }, icon: Icons.keyboard_arrow_left),
       wrap('', () {
-        inputModel.inputKey('VK_UP');
+        press('VK_UP');
       }, icon: Icons.keyboard_arrow_up),
       wrap('', () {
-        inputModel.inputKey('VK_DOWN');
+        press('VK_DOWN');
       }, icon: Icons.keyboard_arrow_down),
       wrap('', () {
-        inputModel.inputKey('VK_RIGHT');
+        press('VK_RIGHT');
       }, icon: Icons.keyboard_arrow_right),
     ];
     while (_itemKeys.length < _items!.length) {
@@ -1549,6 +1563,7 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
       if (_editing) ...[
         wrap('', () => _editShortcut(null, isMac), icon: Icons.add),
         wrap('完了', () => setState(() => _editing = false), active: true),
+        Text('下のキーをタップで追加', style: TextStyle(color: Colors.white70, fontSize: 11)),
       ],
     ];
     final space = size.width > 320 ? 4.0 : 2.0;
@@ -1570,8 +1585,8 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
           runSpacing: space,
           children: <Widget>[brk()] +
               items +
-              (_fn ? fn : []) +
-              (_more ? more : []),
+              (_fn || _editing ? fn : []) +
+              (_more || _editing ? more : []),
         ));
     return _vertical
         ? Positioned(left: 0, top: 0, bottom: 0, child: content)
