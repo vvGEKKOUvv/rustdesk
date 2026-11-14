@@ -2336,8 +2336,20 @@ class CanvasModel with ChangeNotifier {
   static double get bottomToEdge =>
       isDesktop ? windowBorderWidth + kDragToResizeAreaPadding.bottom : 0;
 
+  // mobile only: actual layout area of the remote page (excludes bars/keyboard)
+  Size? layoutSize;
+
   Size getSize() {
     final mediaData = MediaQueryData.fromView(ui.window);
+    final ls = layoutSize;
+    if (isMobile && ls != null) {
+      final top =
+          parent.target?.cursorModel.keyHelpToolsRectToAdjustCanvas?.bottom ??
+              0;
+      final cover = max(top - mediaData.padding.top, 0.0);
+      return Size(ls.width < 0 ? 0 : ls.width,
+          (ls.height - cover) < 0 ? 0 : ls.height - cover);
+    }
     final size = mediaData.size;
     // If minimized, w or h may be negative here.
     double w = size.width - leftToEdge - rightToEdge;

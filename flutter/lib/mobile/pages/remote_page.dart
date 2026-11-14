@@ -604,15 +604,27 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                                   gFFI.canvasModel.updateViewStyle();
                                 });
                               }
-                              return Container(
-                                color: MyTheme.canvasColor,
-                                child: inputModel.isPhysicalMouse.value
-                                    ? getBodyForMobile()
-                                    : RawTouchGestureDetectorRegion(
-                                        child: getBodyForMobile(),
-                                        ffi: gFFI,
-                                      ),
-                              );
+                              return LayoutBuilder(builder: (ctx, box) {
+                                // 青バー・キーボードを除いた実際の表示領域を画面サイズとして使う
+                                final s = Size(box.maxWidth, box.maxHeight);
+                                if (gFFI.canvasModel.layoutSize != s) {
+                                  WidgetsBinding.instance
+                                      .addPostFrameCallback((_) {
+                                    if (!mounted) return;
+                                    gFFI.canvasModel.layoutSize = s;
+                                    gFFI.canvasModel.updateViewStyle();
+                                  });
+                                }
+                                return Container(
+                                  color: MyTheme.canvasColor,
+                                  child: inputModel.isPhysicalMouse.value
+                                      ? getBodyForMobile()
+                                      : RawTouchGestureDetectorRegion(
+                                          child: getBodyForMobile(),
+                                          ffi: gFFI,
+                                        ),
+                                );
+                              });
                             }),
                           ),
                   );
