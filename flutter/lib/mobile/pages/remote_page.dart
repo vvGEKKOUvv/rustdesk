@@ -591,6 +591,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                     child: isWebDesktop
                         ? getBodyForDesktopWithListener()
                         : SafeArea(
+                            right: !(_showBar &&
+                                gFFI.ffiModel.pi.displays.isNotEmpty &&
+                                _barOnRight),
                             child:
                                 OrientationBuilder(builder: (ctx, orientation) {
                               if (_currentOrientation != orientation) {
@@ -738,16 +741,13 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
               )),
         ],
     );
-    if (!vertical) {
-      return BottomAppBar(elevation: 10, color: MyTheme.accent, child: bar);
-    }
+    // No SafeArea here: BottomAppBar adds the home-indicator inset as blank space.
     return Material(
       elevation: 10,
       color: MyTheme.accent,
-      child: SafeArea(
-        left: false,
-        child: SizedBox(width: 56, child: bar),
-      ),
+      child: vertical
+          ? SizedBox(width: 48, child: bar)
+          : SizedBox(height: 48, child: bar),
     );
   }
 
@@ -1072,24 +1072,38 @@ class _KeyShortcut {
       this.shift = false,
       this.win = false});
 
+  // A built-in button (Ctrl, Fn, ...) is kept in the same list so it can be reordered.
+  _KeyShortcut.builtin(this.id)
+      : vk = '',
+        ctrl = false,
+        alt = false,
+        shift = false,
+        win = false;
+
+  String? id;
   String vk;
   bool ctrl;
   bool alt;
   bool shift;
   bool win;
 
-  _KeyShortcut copy() =>
-      _KeyShortcut(vk, ctrl: ctrl, alt: alt, shift: shift, win: win);
+  bool get isBuiltin => id != null;
 
-  Map<String, dynamic> toJson() =>
-      {'vk': vk, 'ctrl': ctrl, 'alt': alt, 'shift': shift, 'win': win};
+  _KeyShortcut copy() => isBuiltin
+      ? _KeyShortcut.builtin(id)
+      : _KeyShortcut(vk, ctrl: ctrl, alt: alt, shift: shift, win: win);
 
-  static _KeyShortcut fromJson(Map<String, dynamic> m) => _KeyShortcut(
-      m['vk'] as String,
-      ctrl: m['ctrl'] == true,
-      alt: m['alt'] == true,
-      shift: m['shift'] == true,
-      win: m['win'] == true);
+  Map<String, dynamic> toJson() => isBuiltin
+      ? {'id': id}
+      : {'vk': vk, 'ctrl': ctrl, 'alt': alt, 'shift': shift, 'win': win};
+
+  static _KeyShortcut fromJson(Map<String, dynamic> m) => m['id'] != null
+      ? _KeyShortcut.builtin(m['id'] as String)
+      : _KeyShortcut(m['vk'] as String,
+          ctrl: m['ctrl'] == true,
+          alt: m['alt'] == true,
+          shift: m['shift'] == true,
+          win: m['win'] == true);
 
   String label(bool isMac) => [
         if (ctrl) 'Ctrl',
@@ -1105,34 +1119,140 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
   var _fn = false;
   var _pin = false;
   var _vertical = false;
-  List<_KeyShortcut>? _shortcuts;
-  static const _shortcutsOptionKey = 'mobile-key-shortcuts';
+  var _editing = false;
+  int? _dragFrom;
+  int? _dragTo;
+  var _dragMoved = false;
+  Offset _downPos = Offset.zero;
+  List<_KeyShortcut>? _items;
+  final _itemKeys = <GlobalKey>[];
+  static const _itemsOptionKey = 'mobile-key-layout';
   final _keyboardVisibilityController = KeyboardVisibilityController();
   final _key = GlobalKey();
 
   InputModel get inputModel => gFFI.inputModel;
 
-  List<_KeyShortcut> _defaultShortcuts(bool isMac) => [
+  List<_KeyShortcut> _defaultItems(bool isMac) => [
+        for (final id in ['ctrl', 'alt', 'shift', 'win', 'fn', 'pin', 'more'])
+          _KeyShortcut.builtin(id),
         for (final vk in ['VK_C', 'VK_V', 'VK_X', 'VK_S'])
           _KeyShortcut(vk, ctrl: !isMac, win: isMac),
       ];
 
-  List<_KeyShortcut> _loadShortcuts(bool isMac) {
+  List<_KeyShortcut> _loadItems(bool isMac) {
     try {
-      final list =
-          jsonDecode(bind.getLocalFlutterOption(k: _shortcutsOptionKey))
-              as List;
+      final list = jsonDecode(bind.getLocalFlutterOption(k: _itemsOptionKey))
+          as List;
       return list
           .map((e) => _KeyShortcut.fromJson(e as Map<String, dynamic>))
           .toList();
     } catch (_) {
-      return _defaultShortcuts(isMac);
+      return _defaultItems(isMac);
     }
   }
 
-  void _saveShortcuts() {
-    bind.setLocalFlutterOption(
-        k: _shortcutsOptionKey, v: jsonEncode(_shortcuts));
+  void _saveItems() {
+    bind.setLocalFlutterOption(k: _itemsOptionKey, v: jsonEncode(_items));
+  }
+
+  int? _itemIndexAt(Offset p) {
+    for (var i = 0; i < _items!.length && i < _itemKeys.length; ++i) {
+      final ro = _itemKeys[i].currentContext?.findRenderObject();
+      if (ro is RenderBox && ro.attached) {
+        if ((ro.localToGlobal(Offset.zero) & ro.size).contains(p)) {
+          return i;
+        }
+      }
+    }
+    return null;
+  }
+
+  void _endDrag(bool isMac, {bool cancelled = false}) {
+    final from = _dragFrom;
+    final to = _dragTo;
+    final moved = _dragMoved;
+    setState(() {
+      _dragFrom = null;
+      _dragTo = null;
+      _dragMoved = false;
+    });
+    if (from == null || cancelled) {
+      return;
+    }
+    if (moved) {
+      if (to != null && to != from) {
+        setState(() => _items!.insert(to, _items!.removeAt(from)));
+        _saveItems();
+      }
+    } else if (!_items![from].isBuiltin) {
+      _editShortcut(from, isMac);
+    }
+  }
+
+  Widget _editItem(int i, bool isMac) {
+    final it = _items![i];
+    final dragging = _dragFrom == i && _dragMoved;
+    final target = _dragMoved && _dragFrom != i && _dragTo == i;
+    final style = TextStyle(color: Colors.white, fontSize: 11);
+    Widget label;
+    if (!it.isBuiltin) {
+      label = Text(it.label(isMac), style: style);
+    } else if (it.id == 'pin') {
+      label = Icon(Icons.push_pin, size: 14, color: Colors.white);
+    } else {
+      label = Text(
+          const {
+            'ctrl': 'Ctrl',
+            'alt': 'Alt',
+            'shift': 'Shift',
+            'fn': 'Fn',
+            'more': '...',
+          }[it.id] ??
+              (isMac ? 'Cmd' : 'Win'),
+          style: style);
+    }
+    return RawGestureDetector(
+      gestures: <Type, GestureRecognizerFactory>{
+        // Claim the touch so the remote-screen gestures do not react while reordering.
+        EagerGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<EagerGestureRecognizer>(
+                () => EagerGestureRecognizer(), (_) {}),
+      },
+      child: Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: (e) {
+          _downPos = e.position;
+          _dragFrom = i;
+          _dragTo = i;
+          _dragMoved = false;
+        },
+        onPointerMove: (e) {
+          if (_dragFrom != i) {
+            return;
+          }
+          if (!_dragMoved && (e.position - _downPos).distance < 8) {
+            return;
+          }
+          final t = _itemIndexAt(e.position);
+          setState(() {
+            _dragMoved = true;
+            _dragTo = t ?? _dragTo;
+          });
+        },
+        onPointerUp: (_) => _endDrag(isMac),
+        onPointerCancel: (_) => _endDrag(isMac, cancelled: true),
+        child: Container(
+          key: _itemKeys[i],
+          padding: EdgeInsets.symmetric(vertical: 10, horizontal: 9.75),
+          decoration: BoxDecoration(
+            color: target ? Colors.amber.withOpacity(0.6) : Colors.white24,
+            border: Border.all(color: Colors.amber),
+            borderRadius: BorderRadius.circular(5.0),
+          ),
+          child: Opacity(opacity: dragging ? 0.3 : 1.0, child: label),
+        ),
+      ),
+    );
   }
 
   void _sendShortcut(_KeyShortcut s) {
@@ -1156,7 +1276,7 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
   void _editShortcut(int? index, bool isMac) {
     final s = index == null
         ? _KeyShortcut('VK_C', ctrl: !isMac, win: isMac)
-        : _shortcuts![index].copy();
+        : _items![index].copy();
     gFFI.dialogManager.show((setState, close, context) {
       Widget chip(String label, bool value, void Function(bool) onChanged) =>
           FilterChip(
@@ -1186,11 +1306,11 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
             ),
             TextButton(
               onPressed: () {
-                this.setState(() => _shortcuts = _defaultShortcuts(isMac));
-                _saveShortcuts();
+                this.setState(() => _items = _defaultItems(isMac));
+                _saveItems();
                 close();
               },
-              child: Text('ショートカットを初期状態に戻す'),
+              child: Text('キー配置を初期状態に戻す'),
             ),
           ],
         ),
@@ -1198,8 +1318,8 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
           if (index != null)
             TextButton(
               onPressed: () {
-                this.setState(() => _shortcuts!.removeAt(index));
-                _saveShortcuts();
+                this.setState(() => _items!.removeAt(index));
+                _saveItems();
                 close();
               },
               child: Text('削除'),
@@ -1209,12 +1329,12 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
             onPressed: () {
               this.setState(() {
                 if (index == null) {
-                  _shortcuts!.add(s);
+                  _items!.add(s);
                 } else {
-                  _shortcuts![index] = s;
+                  _items![index] = s;
                 }
               });
-              _saveShortcuts();
+              _saveItems();
               close();
             },
             child: Text('保存'),
@@ -1226,9 +1346,8 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
   }
 
   Widget wrap(String text, void Function() onPressed,
-      {bool? active, IconData? icon, void Function()? onLongPress}) {
+      {bool? active, IconData? icon}) {
     return TextButton(
-        onLongPress: onLongPress,
         style: TextButton.styleFrom(
           minimumSize: Size(0, 0),
           padding: EdgeInsets.symmetric(vertical: 10, horizontal: 9.75),
@@ -1271,6 +1390,7 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
         (inputModel.shift && !keyboard.isShiftPressed) ||
         (inputModel.command && !keyboard.isMetaPressed);
     if (!_pin && !hasTouchModifier && !widget.requestShow) {
+      _editing = false;
       gFFI.cursorModel
           .keyHelpToolsVisibilityChanged(null, widget.keyboardIsVisible);
       return Offstage();
@@ -1282,25 +1402,23 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
 
     final pi = gFFI.ffiModel.pi;
     final isMac = pi.platform == kPeerPlatformMacOS;
-    _shortcuts ??= _loadShortcuts(isMac);
+    _items ??= _loadItems(isMac);
     final isWin = pi.platform == kPeerPlatformWindows;
     final isLinux = pi.platform == kPeerPlatformLinux;
-    final modifiers = <Widget>[
-      wrap('Ctrl ', () {
+    final builtins = <String, Widget>{
+      'ctrl': wrap('Ctrl ', () {
         setState(() => inputModel.ctrl = !inputModel.ctrl);
       }, active: inputModel.ctrl),
-      wrap(' Alt ', () {
+      'alt': wrap(' Alt ', () {
         setState(() => inputModel.alt = !inputModel.alt);
       }, active: inputModel.alt),
-      wrap('Shift', () {
+      'shift': wrap('Shift', () {
         setState(() => inputModel.shift = !inputModel.shift);
       }, active: inputModel.shift),
-      wrap(isMac ? ' Cmd ' : ' Win ', () {
+      'win': wrap(isMac ? ' Cmd ' : ' Win ', () {
         setState(() => inputModel.command = !inputModel.command);
       }, active: inputModel.command),
-    ];
-    final keys = <Widget>[
-      wrap(
+      'fn': wrap(
           ' Fn ',
           () => setState(
                 () {
@@ -1311,14 +1429,14 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
                 },
               ),
           active: _fn),
-      wrap(
+      'pin': wrap(
           '',
           () => setState(
                 () => _pin = !_pin,
               ),
           active: _pin,
           icon: Icons.push_pin),
-      wrap(
+      'more': wrap(
           ' ... ',
           () => setState(
                 () {
@@ -1329,7 +1447,7 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
                 },
               ),
           active: _more),
-    ];
+    };
     final fn = <Widget>[
       brk(),
     ];
@@ -1401,11 +1519,24 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
         inputModel.inputKey('VK_RIGHT');
       }, icon: Icons.keyboard_arrow_right),
     ];
-    final shortcuts = <Widget>[
-      for (var i = 0; i < _shortcuts!.length; ++i)
-        wrap(_shortcuts![i].label(isMac), () => _sendShortcut(_shortcuts![i]),
-            onLongPress: () => _editShortcut(i, isMac)),
-      wrap('', () => _editShortcut(null, isMac), icon: Icons.add),
+    while (_itemKeys.length < _items!.length) {
+      _itemKeys.add(GlobalKey());
+    }
+    final items = <Widget>[
+      for (var i = 0; i < _items!.length; ++i)
+        if (_editing)
+          _editItem(i, isMac)
+        else
+          GestureDetector(
+              onLongPress: () => setState(() => _editing = true),
+              child: _items![i].isBuiltin
+                  ? builtins[_items![i].id] ?? SizedBox()
+                  : wrap(_items![i].label(isMac),
+                      () => _sendShortcut(_items![i]))),
+      if (_editing) ...[
+        wrap('', () => _editShortcut(null, isMac), icon: Icons.add),
+        wrap('完了', () => setState(() => _editing = false), active: true),
+      ],
     ];
     final space = size.width > 320 ? 4.0 : 2.0;
     // 500 ms is long enough for this widget to be built!
@@ -1425,9 +1556,7 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
           spacing: space,
           runSpacing: space,
           children: <Widget>[brk()] +
-              modifiers +
-              keys +
-              shortcuts +
+              items +
               (_fn ? fn : []) +
               (_more ? more : []),
         ));
