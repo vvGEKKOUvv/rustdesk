@@ -3855,6 +3855,13 @@ class CursorModel with ChangeNotifier {
     notifyListeners();
   }
 
+  centerOn(double x, double y) {
+    _x = x;
+    _y = y;
+    parent.target?.inputModel.moveMouse(x, y);
+    notifyListeners();
+  }
+
   updateDisplayOriginWithCursor(
       double x, double y, double xCursor, double yCursor) {
     _displayOriginX = x;
@@ -4665,6 +4672,10 @@ Future<void> initializeCursorAndCanvas(FFI ffi) async {
   if (p == null || currentDisplay != ffi.ffiModel.pi.currentDisplay) {
     ffi.cursorModel.updateDisplayOrigin(
         ffi.ffiModel.rect?.left ?? 0, ffi.ffiModel.rect?.top ?? 0);
+    final rect = ffi.ffiModel.rect;
+    if (isMobile && rect != null) {
+      ffi.cursorModel.centerOn(rect.center.dx, rect.center.dy);
+    }
     return;
   }
   double xCursor = p['xCursor'];
