@@ -3261,7 +3261,13 @@ class CursorModel with ChangeNotifier {
     final scale = parent.target?.canvasModel.scale ?? 1;
     final x0 = _displayOriginX - xoffset / scale;
     final y0 = _displayOriginY - yoffset / scale;
-    return Rect.fromLTWH(x0, y0, size.width / scale, size.height / scale);
+    // The canvas keeps its full height while the soft keyboard covers the lower
+    // part, so only the upper part counts as visible (cursor center, edges).
+    final hidden = isMobile && _lastKeyboardIsVisible
+        ? MediaQueryData.fromView(ui.window).viewInsets.bottom
+        : 0.0;
+    final h = max(size.height - hidden, 0.0);
+    return Rect.fromLTWH(x0, y0, size.width / scale, h / scale);
   }
 
   Offset getCanvasOffsetToCenterCursor() {
