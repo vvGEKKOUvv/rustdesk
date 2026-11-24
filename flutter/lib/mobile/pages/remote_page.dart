@@ -515,6 +515,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       !_showGestureHelp &&
       MediaQuery.of(context).orientation == Orientation.landscape;
 
+  bool get _bottomBarShown =>
+      _showGestureHelp ||
+      (_showBar && gFFI.ffiModel.pi.displays.isNotEmpty && !_barOnRight);
+
   Widget _bottomWidget() => _showGestureHelp
       ? getGestureHelp()
       : (_showBar && gFFI.ffiModel.pi.displays.isNotEmpty && !_barOnRight
@@ -596,8 +600,20 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                             right: !(_showBar &&
                                 gFFI.ffiModel.pi.displays.isNotEmpty &&
                                 _barOnRight),
-                            child:
-                                OrientationBuilder(builder: (ctx, orientation) {
+                            // iOS はホームバーに重ならないよう、リモート画面の枠ごと下端を空ける
+                            // (下の青バー表示中・キーボード表示中は不要)
+                            child: Padding(
+                              padding: EdgeInsets.only(
+                                  bottom: isIOS &&
+                                          !_bottomBarShown &&
+                                          MediaQuery.of(context)
+                                                  .viewInsets
+                                                  .bottom ==
+                                              0
+                                      ? 20
+                                      : 0),
+                              child: OrientationBuilder(
+                                  builder: (ctx, orientation) {
                               if (_currentOrientation != orientation) {
                                 Timer(const Duration(milliseconds: 200), () {
                                   gFFI.dialogManager
@@ -627,7 +643,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                                         ),
                                 );
                               });
-                            }),
+                            })),
                           ),
                   );
                 })
