@@ -798,6 +798,43 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                   showGestureHelp: _showGestureHelp,
                   showShortcuts: _showShortcuts);
             }),
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom: 8,
+              child: IgnorePointer(
+                child: ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _textController,
+                  builder: (context, v, _) {
+                    if (!isIOS ||
+                        !_showEdit ||
+                        !v.isComposingRangeValid ||
+                        v.composing.isCollapsed) {
+                      return const SizedBox.shrink();
+                    }
+                    return Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.black87,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          v.composing.textInside(v.text),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
             SizedBox(
               width: 0,
               height: 0,
