@@ -105,7 +105,6 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   final FocusNode _mobileFocusNode = FocusNode();
   final FocusNode _physicalFocusNode = FocusNode();
   var _showEdit = false; // use soft keyboard
-  var _keyboardType = TextInputType.multiline;
   var _showShortcuts = false; // ショートカットバーだけを表示する
 
   Worker? _waylandKeyboardGateWorker;
@@ -398,17 +397,6 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     } else {
       inputChar(newStr);
     }
-    if (newStr.length == 1 && '、。，．！？「」『』（）・…'.contains(newStr)) {
-      _resetIOSKeyboardLayout();
-    }
-  }
-
-  // 記号面(123)で句読点を確定した後、かな入力面へ戻すためキーボードを一瞬だけ再構成する
-  void _resetIOSKeyboardLayout() {
-    setState(() => _keyboardType = TextInputType.text);
-    Timer(const Duration(milliseconds: 80), () {
-      if (mounted) setState(() => _keyboardType = TextInputType.multiline);
-    });
   }
 
   void _handleNonIOSSoftKeyboardInput(String newValue) {
@@ -605,8 +593,6 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                     child: isWebDesktop
                         ? getBodyForDesktopWithListener()
                         : SafeArea(
-                            // ホームバーの上の余白をなくし、リモート画面を下端まで広げる
-                            bottom: !isIOS,
                             right: !(_showBar &&
                                 gFFI.ffiModel.pi.displays.isNotEmpty &&
                                 _barOnRight),
@@ -783,7 +769,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       color: MyTheme.accent,
       child: vertical
           ? SizedBox(width: 48, child: bar)
-          : SizedBox(height: 48, child: bar),
+          // iOS はホームバーに重ならないよう、バー全体を少し上げる
+          : Padding(
+              padding: EdgeInsets.only(bottom: isIOS ? 14 : 0),
+              child: SizedBox(height: 48, child: bar)),
     );
   }
 
@@ -832,7 +821,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.black87,
+                          color: Colors.black54,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
@@ -867,7 +856,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                       maxLines: null,
                       controller: _textController,
                       // trick way to make backspace work always
-                      keyboardType: _keyboardType,
+                      keyboardType: TextInputType.multiline,
                       // `onChanged` may be called depending on the input method if this widget is wrapped in
                       // `Focus(onKeyEvent: ..., child: ...)`
                       // For `Backspace` button in the soft keyboard:
