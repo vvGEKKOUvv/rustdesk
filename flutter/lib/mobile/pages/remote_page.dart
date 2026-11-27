@@ -1214,6 +1214,7 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
   List<_KeyShortcut>? _items;
   final _itemKeys = <GlobalKey>[];
   static const _itemsOptionKey = 'mobile-key-layout';
+  static const _addedAZOptionKey = 'mobile-key-layout-added-az';
   final _keyboardVisibilityController = KeyboardVisibilityController();
   final _key = GlobalKey();
 
@@ -1222,7 +1223,7 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
   List<_KeyShortcut> _defaultItems(bool isMac) => [
         for (final id in ['ctrl', 'alt', 'shift', 'win', 'fn', 'pin', 'more'])
           _KeyShortcut.builtin(id),
-        for (final vk in ['VK_C', 'VK_V', 'VK_X', 'VK_S'])
+        for (final vk in ['VK_C', 'VK_V', 'VK_X', 'VK_S', 'VK_A', 'VK_Z'])
           _KeyShortcut(vk, ctrl: !isMac, win: isMac),
       ];
 
@@ -1230,10 +1231,22 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
     try {
       final list = jsonDecode(bind.getLocalFlutterOption(k: _itemsOptionKey))
           as List;
-      return list
+      final items = list
           .map((e) => _KeyShortcut.fromJson(e as Map<String, dynamic>))
           .toList();
+      // 既存の保存済み配置にも、Ctrl+A / Ctrl+Z を一度だけ追加する
+      if (bind.getLocalFlutterOption(k: _addedAZOptionKey).isEmpty) {
+        for (final vk in ['VK_A', 'VK_Z']) {
+          if (!items.any((e) => !e.isBuiltin && e.vk == vk && !e.alt && !e.shift)) {
+            items.add(_KeyShortcut(vk, ctrl: !isMac, win: isMac));
+          }
+        }
+        bind.setLocalFlutterOption(k: _addedAZOptionKey, v: 'y');
+        bind.setLocalFlutterOption(k: _itemsOptionKey, v: jsonEncode(items));
+      }
+      return items;
     } catch (_) {
+      bind.setLocalFlutterOption(k: _addedAZOptionKey, v: 'y');
       return _defaultItems(isMac);
     }
   }
